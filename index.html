@@ -112,7 +112,7 @@
                 ghost: "bg-transparent text-[#2D2D2D] hover:bg-black/5",
             };
             return (
-                <button onClick={onClick} disabled={disabled} className={`\( {base} \){styles[variant]} ${className}`}>
+                <button onClick={onClick} disabled={disabled} className={`${base} ${styles[variant] || ''} ${className}`}>
                 {Icon && <Icon size={20} />}
                 {children}
                 </button>
@@ -120,8 +120,9 @@
         };
 
         const formatMoney = (amount, currency, exchangeRate) => {
-            if (currency === 'NIO') return `C$ ${amount.toLocaleString('es-NI', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
-            return `$ ${(amount / exchangeRate).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+            const n = typeof amount === 'number' ? amount : parseFloat(amount) || 0;
+            if (currency === 'NIO') return `C$ ${n.toLocaleString('es-NI', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+            return `$ ${(n / exchangeRate).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
         };
 
         // --- VIEW COMPONENTS ---
@@ -217,7 +218,7 @@
                         {shortcuts.map(sc => {
                             const IconComp = ALL_ICONS[sc.icon] || ShoppingBag;
                             return (
-                                <button key={sc.id} onClick={() => handleQuickAdd(sc)} className="snap-center flex-shrink-0 w-24 h-28 bg-white rounded-2xl flex flex-col items-center justify-center gap-2 shadow-sm border border-transparent active:border-[#D4AF37] active:scale-95 transition-all">
+                                <button key={sc.id} onClick={() => handleQuickAdd(sc)} className="snap-center flex-shrink-0 w-24 h-28 bg-white rounded-2xl flex flex-col items-center justify-center gap-2 p-2 shadow-sm">
                                     <div className="p-3 rounded-full bg-opacity-10" style={{backgroundColor: sc.color+'20'}}>
                                         <IconComp size={22} style={{color: sc.color}} />
                                     </div>
@@ -288,21 +289,22 @@
                 });
             }, [transactions, currentDate]);
 
-            const totalSpent = monthData.reduce((acc, t) => acc + t.amount, 0);
-            const prevSpent = prevMonthData.reduce((acc, t) => acc + t.amount, 0);
+            const totalSpent = monthData.reduce((acc, t) => acc + (parseFloat(t.amount) || 0), 0);
+            const prevSpent = prevMonthData.reduce((acc, t) => acc + (parseFloat(t.amount) || 0), 0);
             
             let comparisonText = "Sin datos previos";
             if (prevSpent > 0) {
                 const diff = totalSpent - prevSpent;
-                const percent = ((diff / prevSpent) * 100).toFixed(0);
-                comparisonText = diff > 0 ? `\( {percent}% más que el mes pasado` : ` \){Math.abs(percent)}% menos que el mes pasado`;
+                // percent represents absolute change relative to previous month
+                const percent = Math.round(Math.abs((diff / prevSpent) * 100));
+                comparisonText = diff > 0 ? `${percent}% más que el mes pasado` : `${percent}% menos que el mes pasado`;
             }
 
             const chartData = useMemo(() => {
                 const grouped = {};
                 monthData.forEach(t => {
                     const catId = t.categoryId || 'unknown';
-                    grouped[catId] = (grouped[catId] || 0) + t.amount;
+                    grouped[catId] = (grouped[catId] || 0) + (parseFloat(t.amount) || 0);
                 });
                 const total = Object.values(grouped).reduce((a,b) => a+b, 0);
                 return Object.keys(grouped).map(k => {
@@ -317,7 +319,17 @@
             }, [monthData]);
 
             const handlePrintPDF = () => {
-                window.print();
+                // unhide printable area before print (print CSS already handles visibility),
+                // ensure the element is visible for print by temporarily removing hidden if needed.
+                const el = document.getElementById('printable-area');
+                if (el) {
+                    el.classList.remove('hidden');
+                    window.print();
+                    // after print, hide again to restore UI
+                    el.classList.add('hidden');
+                } else {
+                    window.print();
+                }
             }
 
             return (
@@ -336,7 +348,9 @@
                             {currentDate.toLocaleDateString('es-NI', { month: 'long', year: 'numeric' })}
                         </span>
                     </div>
-                    <button onClick={handleNextMonth} disabled={currentDate.getMonth() === new Date().getMonth() && currentDate.getFullYear() === new Date().getFullYear()} className="p-2 hover:bg-gray-100 rounded-xl disabled:opacity-30"><ChevronRight size={20}/></button>
+                    <button onClick={handleNextMonth} disabled={currentDate.getMonth() === new Date().getMonth() && currentDate.getFullYear() === new Date().getFullYear()} className="p-2 hover:bg-gray-100 rounded-xl disabled:opacity-40">
+                        <ChevronRight size={20}/>
+                    </button>
                 </div>
 
                 <div className="bg-[#1A4D2E] text-white p-6 rounded-3xl shadow-lg">
@@ -450,8 +464,8 @@
                     <div className="flex justify-between items-center p-6">
                         <button onClick={onClose} className="p-2 bg-gray-200 rounded-full"><X size={24}/></button>
                         <div className="flex bg-gray-200 p-1 rounded-full">
-                            <button onClick={() => setTransType('expense')} className={`px-4 py-1.5 rounded-full text-xs font-bold transition-all ${transType === 'expense' ? 'bg-white shadow-sm text-red-700' : 'text-gray-500'}`}>Gasto</button>
-                            <button onClick={() => setTransType('income')} className={`px-4 py-1.5 rounded-full text-xs font-bold transition-all ${transType === 'income' ? 'bg-white shadow-sm text-green-700' : 'text-gray-500'}`}>Ingreso</button>
+                            <button onClick={() => setTransType('expense')} className={`px-4 py-1.5 rounded-full text-xs font-bold transition-all ${transType === 'expense' ? 'bg-white shadow-sm text-red-600' : ''}`}>Gasto</button>
+                            <button onClick={() => setTransType('income')} className={`px-4 py-1.5 rounded-full text-xs font-bold transition-all ${transType === 'income' ? 'bg-white shadow-sm text-green-600' : ''}`}>Ingreso</button>
                         </div>
                         <div className="w-10"></div>
                     </div>
@@ -460,7 +474,7 @@
                         <div className="flex flex-col items-center mb-8 w-full">
                             <p className="text-sm text-gray-500 mb-2 uppercase tracking-widest">Monto ({currency})</p>
                             <div className="relative w-full flex justify-center">
-                                <span className="absolute left-[15%] top-1/2 -translate-y-1/2 text-3xl text-gray-400 font-serif">{currency === 'NIO' ? 'C\( ' : ' \)'}</span>
+                                <span className="absolute left-[15%] top-1/2 -translate-y-1/2 text-3xl text-gray-400 font-serif">{currency === 'NIO' ? 'C$' : '$'}</span>
                                 <input 
                                 type="number" 
                                 inputMode="decimal"
@@ -468,7 +482,7 @@
                                 onChange={(e) => setTransAmount(e.target.value)}
                                 placeholder="0.00"
                                 autoFocus
-                                className={`w-full text-center text-6xl font-serif font-bold bg-transparent outline-none focus:outline-none placeholder:text-gray-200 ${transType === 'income' ? 'text-[#1A4D2E]' : 'text-[#2D2D2D]'}`}
+                                className={`w-full text-center text-6xl font-serif font-bold bg-transparent outline-none focus:outline-none placeholder:text-gray-200 ${transType === 'income' ? 'text-green-600' : 'text-red-600'}`}
                                 />
                             </div>
                         </div>
@@ -478,7 +492,7 @@
                                 <p className="text-xs text-center mb-3 text-gray-400 uppercase tracking-widest">Categoría</p>
                                 <div className="flex justify-center gap-4 flex-wrap">
                                     {categories.filter(c => c.id !== 'income').map(cat => (
-                                        <button key={cat.id} onClick={() => setTransCategory(cat)} className={`flex flex-col items-center gap-1 p-2 rounded-xl transition-all ${transCategory.id === cat.id ? 'scale-110 opacity-100' : 'opacity-40 grayscale'}`}>
+                                        <button key={cat.id} onClick={() => setTransCategory(cat)} className={`flex flex-col items-center gap-1 p-2 rounded-xl transition-all ${transCategory.id === cat.id ? 'bg-[#F9F7F2] shadow-sm' : ''}`}>
                                             <div className="p-3 rounded-full text-white shadow-md" style={{backgroundColor: cat.color}}><cat.icon size={20}/></div>
                                             <span className="text-[10px] font-medium">{cat.name}</span>
                                         </button>
@@ -501,9 +515,11 @@
                             <div className="w-full">
                                 <p className="text-[10px] text-center mb-2 text-gray-400 uppercase">Asociar a Meta/Evento</p>
                                 <div className="flex gap-2 overflow-x-auto pb-2 justify-center scrollbar-hide">
-                                    <button onClick={() => setTransEventId(null)} className={`px-4 py-2 rounded-full text-xs font-bold border transition-all ${!transEventId ? 'bg-gray-800 text-white' : 'bg-white text-gray-500'}`}>Ninguno</button>
+                                    <button onClick={() => setTransEventId(null)} className={`px-4 py-2 rounded-full text-xs font-bold border transition-all ${!transEventId ? 'bg-gray-800 text-white' : ''}`}>Ninguno</button>
                                     {events.map(ev => (
-                                        <button key={ev.id} onClick={() => setTransEventId(ev.id)} className={`px-4 py-2 rounded-full text-xs font-bold border transition-all ${transEventId === ev.id ? 'bg-[#D4AF37] text-white border-[#D4AF37]' : 'bg-white text-gray-500'}`}>{ev.name}</button>
+                                        <button key={ev.id} onClick={() => setTransEventId(ev.id)} className={`px-4 py-2 rounded-full text-xs font-bold border transition-all ${transEventId === ev.id ? 'bg-[#D4AF37] text-white' : ''}`}>
+                                            {ev.name}
+                                        </button>
                                     ))}
                                 </div>
                             </div>
@@ -575,7 +591,7 @@
                                         <p className="text-[10px] uppercase text-gray-400 mb-2">Categoría Real del Gasto</p>
                                         <div className="flex gap-2 overflow-x-auto pb-2 scrollbar-hide">
                                             {categories.filter(c => c.id !== 'income').map(cat => (
-                                                <button key={cat.id} onClick={() => setSelectedCategory(cat)} className={`p-2 rounded-xl flex-shrink-0 flex flex-col items-center gap-1 min-w-[60px] transition-all ${selectedCategory.id === cat.id ? 'bg-gray-100 scale-105 border border-gray-300' : 'opacity-50'}`}>
+                                                <button key={cat.id} onClick={() => setSelectedCategory(cat)} className={`p-2 rounded-xl flex-shrink-0 flex flex-col items-center gap-1 min-w-[60px] transition-all ${selectedCategory.id === cat.id ? 'ring-2 ring-[#D4AF37]' : ''}`}>
                                                     <cat.icon size={16} color={cat.color}/>
                                                     <span className="text-[9px]">{cat.name}</span>
                                                 </button>
@@ -601,7 +617,7 @@
                 const progress = {};
                 transactions.forEach(t => {
                     if(t.eventId && t.type === 'expense') {
-                        progress[t.eventId] = (progress[t.eventId] || 0) + t.amount;
+                        progress[t.eventId] = (progress[t.eventId] || 0) + (parseFloat(t.amount) || 0);
                     }
                 });
                 return progress;
@@ -733,10 +749,10 @@
 
             useEffect(() => {
                 if (!user) return;
-                const txQuery = db.collection(`artifacts/\( {appId}/users/ \){user.uid}/transactions`).orderBy('date', 'desc');
+                const txQuery = db.collection(`artifacts/${appId}/users/${user.uid}/transactions`).orderBy('date', 'desc');
                 const unsubTx = txQuery.onSnapshot((snap) => setTransactions(snap.docs.map(doc => ({ id: doc.id, ...doc.data() }))));
 
-                const settingsRef = db.doc(`artifacts/\( {appId}/users/ \){user.uid}/settings/config`);
+                const settingsRef = db.doc(`artifacts/${appId}/users/${user.uid}/settings/config`);
                 const unsubSettings = settingsRef.onSnapshot((snap) => {
                     if (snap.exists) {
                         const data = snap.data();
@@ -747,7 +763,7 @@
                     }
                 });
 
-                const eventsQuery = db.collection(`artifacts/\( {appId}/users/ \){user.uid}/events`).orderBy('createdAt', 'desc');
+                const eventsQuery = db.collection(`artifacts/${appId}/users/${user.uid}/events`).orderBy('createdAt', 'desc');
                 const unsubEvents = eventsQuery.onSnapshot((snap) => setEvents(snap.docs.map(doc => ({ id: doc.id, ...doc.data() }))));
 
                 return () => { unsubTx(); unsubSettings(); unsubEvents(); };
@@ -757,7 +773,7 @@
                 const now = new Date();
                 let totalBalance = 0, monthIncome = 0, monthExpense = 0;
                 transactions.forEach(t => {
-                    const val = parseFloat(t.amount);
+                    const val = parseFloat(t.amount) || 0;
                     const d = t.date.toDate();
                     const isThisMonth = d.getMonth() === now.getMonth() && d.getFullYear() === now.getFullYear();
                     if (t.type === 'income') {
@@ -774,21 +790,21 @@
             const handleAddTransaction = async (data) => {
                 if (!user) return;
                 const finalAmount = currency === 'USD' ? data.amount * exchangeRate : data.amount;
-                await db.collection(`artifacts/\( {appId}/users/ \){user.uid}/transactions`).add({
+                await db.collection(`artifacts/${appId}/users/${user.uid}/transactions`).add({
                     amount: finalAmount,
                     categoryId: data.type === 'income' ? 'income' : data.category.id,
                     categoryName: data.type === 'income' ? 'Ingreso' : data.category.name,
                     note: data.note || (data.type === 'income' ? 'Ingreso' : data.category.name),
                     date: firebase.firestore.Timestamp.now(),
                     type: data.type,
-                    eventId: data.eventId
+                    eventId: data.eventId || null
                 });
             };
 
             const handleQuickAdd = async (shortcut) => {
                 if (!user) return;
                 const catObj = CATEGORIES.find(c => c.id === shortcut.categoryId) || CATEGORIES[1];
-                await db.collection(`artifacts/\( {appId}/users/ \){user.uid}/transactions`).add({
+                await db.collection(`artifacts/${appId}/users/${user.uid}/transactions`).add({
                 amount: shortcut.amount,
                 categoryId: catObj.id,
                 categoryName: catObj.name,
@@ -801,34 +817,34 @@
 
             const handleShortcutAdd = async (newSc) => {
                 const updated = [...shortcuts, { ...newSc, id: Date.now().toString(), type: 'expense' }];
-                await db.doc(`artifacts/\( {appId}/users/ \){user.uid}/settings/config`).set({ shortcuts: updated }, { merge: true });
+                await db.doc(`artifacts/${appId}/users/${user.uid}/settings/config`).set({ shortcuts: updated }, { merge: true });
             };
 
             const handleShortcutDelete = async (id) => {
                 const updated = shortcuts.filter(s => s.id !== id);
-                await db.doc(`artifacts/\( {appId}/users/ \){user.uid}/settings/config`).set({ shortcuts: updated }, { merge: true });
+                await db.doc(`artifacts/${appId}/users/${user.uid}/settings/config`).set({ shortcuts: updated }, { merge: true });
             };
 
             const handleAddEvent = async (name, budget) => {
                 if(!name || !user) return;
-                await db.collection(`artifacts/\( {appId}/users/ \){user.uid}/events`).add({
+                await db.collection(`artifacts/${appId}/users/${user.uid}/events`).add({
                     name, budget: parseFloat(budget) || 0, createdAt: firebase.firestore.Timestamp.now()
                 });
             }
 
             const handleDeleteEvent = async (id) => {
                 if (!user) return;
-                await db.doc(`artifacts/\( {appId}/users/ \){user.uid}/events/${id}`).delete();
+                await db.doc(`artifacts/${appId}/users/${user.uid}/events/${id}`).delete();
             }
 
             const handleUpdateExchange = async (val) => {
                 setExchangeRate(val);
-                await db.doc(`artifacts/\( {appId}/users/ \){user.uid}/settings/config`).set({ exchangeRate: val }, { merge: true });
+                await db.doc(`artifacts/${appId}/users/${user.uid}/settings/config`).set({ exchangeRate: val }, { merge: true });
             }
 
             const handleLogout = () => auth.signOut();
 
-            if (authLoading) return <div className="min-h-screen bg-[#F9F7F2] flex items-center justify-center"><div className="animate-spin rounded-full h-10 w-10 border-b-2 border-[#1A4D2E]"></div></div>;
+            if (authLoading) return <div className="min-h-screen bg-[#F9F7F2] flex items-center justify-center"><div className="animate-spin rounded-full h-10 w-10 border-b-2 border-[#1A4D2E]"></div><div className="sr-only">Cargando...</div></div>;
             if (!user) return <LoginView />;
 
             return (
@@ -846,16 +862,18 @@
                 </main>
 
                 <div className="fixed bottom-8 left-1/2 -translate-x-1/2 z-40">
-                    <button onClick={() => setIsAddOpen(true)} className="bg-[#D4AF37] text-white w-16 h-16 rounded-full shadow-[0_4px_20px_rgba(212,175,55,0.4)] flex items-center justify-center transition-transform active:scale-90 border-4 border-[#F9F7F2]"><Plus size={32}/></button>
+                    <button onClick={() => setIsAddOpen(true)} className="bg-[#D4AF37] text-white w-16 h-16 rounded-full shadow-[0_4px_20px_rgba(212,175,55,0.4)] flex items-center justify-center transition-transform active:scale-95">
+                        <Plus size={28} />
+                    </button>
                 </div>
 
                 <div className="fixed bottom-0 left-0 right-0 bg-white border-t border-gray-100 pb-safe pt-2 px-6 z-30">
                     <div className="max-w-md mx-auto flex justify-between items-end pb-4">
-                        <button onClick={() => setView('dashboard')} className={`flex flex-col items-center gap-1 w-16 ${view === 'dashboard' ? 'text-[#1A4D2E]' : 'text-gray-300'}`}><Wallet size={24} strokeWidth={view==='dashboard'?2.5:2} /><span className="text-[10px] font-medium">Wallet</span></button>
-                        <button onClick={() => setView('stats')} className={`flex flex-col items-center gap-1 w-16 ${view === 'stats' ? 'text-[#1A4D2E]' : 'text-gray-300'}`}><TrendingUp size={24} strokeWidth={view==='stats'?2.5:2} /><span className="text-[10px] font-medium">Stats</span></button>
+                        <button onClick={() => setView('dashboard')} className={`flex flex-col items-center gap-1 w-16 ${view === 'dashboard' ? 'text-[#1A4D2E]' : 'text-gray-300'}`}><Wallet size={24} /><span className="text-xs">Inicio</span></button>
+                        <button onClick={() => setView('stats')} className={`flex flex-col items-center gap-1 w-16 ${view === 'stats' ? 'text-[#1A4D2E]' : 'text-gray-300'}`}><TrendingUp size={24} /><span className="text-xs">Análisis</span></button>
                         <div className="w-16"></div>
-                        <button onClick={() => setView('goals')} className={`flex flex-col items-center gap-1 w-16 ${view === 'goals' ? 'text-[#1A4D2E]' : 'text-gray-300'}`}><Briefcase size={24} strokeWidth={view==='goals'?2.5:2} /><span className="text-[10px] font-medium">Metas</span></button>
-                        <button onClick={() => setView('settings')} className={`flex flex-col items-center gap-1 w-16 ${view === 'settings' ? 'text-[#1A4D2E]' : 'text-gray-300'}`}><Settings size={24} strokeWidth={view==='settings'?2.5:2} /><span className="text-[10px] font-medium">Ajustes</span></button>
+                        <button onClick={() => setView('goals')} className={`flex flex-col items-center gap-1 w-16 ${view === 'goals' ? 'text-[#1A4D2E]' : 'text-gray-300'}`}><Briefcase size={24} /><span className="text-xs">Metas</span></button>
+                        <button onClick={() => setView('settings')} className={`flex flex-col items-center gap-1 w-16 ${view === 'settings' ? 'text-[#1A4D2E]' : 'text-gray-300'}`}><Settings size={24} /><span className="text-xs">Ajustes</span></button>
                     </div>
                 </div>
 
