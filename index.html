@@ -3,39 +3,13 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Control de Gastos</title>
+    <title>NicaWallet</title>
     
     <!-- 1. Tailwind CSS (Estilos) -->
     <script src="https://cdn.tailwindcss.com"></script>
     
-    <!-- 2. React y ReactDOM -->
-    <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
-    <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
-    
-    <!-- 3. Babel (Para entender el código JSX) -->
+    <!-- 2. Babel (Para entender el código JSX) -->
     <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
-
-    <!-- 4. Recharts (Gráficos) -->
-    <script src="https://unpkg.com/recharts/umd/Recharts.js"></script>
-
-    <!-- 5. Lucide Icons (Iconos) -->
-    <script src="https://unpkg.com/lucide@latest"></script>
-    <!-- Wrapper para usar Lucide en React sin build step -->
-    <script>
-        // Pequeño helper para renderizar iconos Lucide en React puro
-        const Icon = ({ name, size = 24, className, style }) => {
-            const lucideIcon = window.lucide.icons[name];
-            if (!lucideIcon) return null;
-            
-            // Convertimos el SVG string a elementos React (simplificado)
-            // Para esta versión sin build, usaremos un truco: dangerouslySetInnerHTML
-            // Nota: En producción real se usa la librería lucide-react, aquí usamos lucide global
-            
-            // Mejor aproximación para este entorno: Usar imagen SVG directa manipulada
-            // O mapear manualmente los iconos más importantes si fallara la carga dinámica.
-            // Para simplicidad y robustez en "un solo archivo", usaremos los nombres directos.
-        };
-    </script>
 
     <style>
         @import url('https://fonts.googleapis.com/css2?family=DM+Sans:opsz,wght@9..40,400;500;700&family=Playfair+Display:ital,wght@0,400;0,600;0,700;1,400&display=swap');
@@ -55,17 +29,19 @@
 <body>
     <div id="root"></div>
 
-    <!-- Import Map para que el navegador entienda los imports modernos -->
+    <!-- Firebase Compat CDN (para uso global sin imports modulares) -->
+    <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-auth-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore-compat.js"></script>
+
+    <!-- Import Map para librerías ESM (React, Recharts, Lucide) -->
     <script type="importmap">
     {
         "imports": {
             "react": "https://esm.sh/react@18.2.0",
             "react-dom/client": "https://esm.sh/react-dom@18.2.0/client",
             "lucide-react": "https://esm.sh/lucide-react@0.294.0",
-            "recharts": "https://esm.sh/recharts@2.10.3",
-            "firebase/app": "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js",
-            "firebase/auth": "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js",
-            "firebase/firestore": "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js"
+            "recharts": "https://esm.sh/recharts@2.10.3"
         }
     }
     </script>
@@ -83,21 +59,10 @@
             ChevronLeft, ChevronRight, Filter, FileText, Lock, Mail
         } from 'lucide-react';
 
-        // Importamos Firebase
-        import { initializeApp } from "firebase/app";
-        import { 
-            getAuth, onAuthStateChanged, signInWithEmailAndPassword, 
-            createUserWithEmailAndPassword, signOut, updateProfile 
-        } from "firebase/auth";
-        import { 
-            getFirestore, collection, addDoc, query, orderBy, onSnapshot, 
-            deleteDoc, doc, setDoc, Timestamp 
-        } from "firebase/firestore";
-
         // Importamos Recharts
         import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip } from 'recharts';
 
-        // --- CONFIGURACIÓN FIREBASE ---
+        // --- CONFIGURACIÓN FIREBASE (usando global firebase) ---
         const firebaseConfig = {
             apiKey: "AIzaSyAzhISkpS1PpfyA4gXngKxvsYbMv4bOFFo",
             authDomain: "nicawallett.firebaseapp.com",
@@ -107,9 +72,9 @@
             appId: "1:1087542817342:web:ccd126bd991b86e43bd76f"
         };
 
-        const app = initializeApp(firebaseConfig);
-        const auth = getAuth(app);
-        const db = getFirestore(app);
+        const app = firebase.initializeApp(firebaseConfig);
+        const auth = firebase.auth(app);
+        const db = firebase.firestore(app);
         const appId = 'production-app-v1'; // ID fijo para producción
 
         // --- CONSTANTES ---
@@ -147,7 +112,7 @@
                 ghost: "bg-transparent text-[#2D2D2D] hover:bg-black/5",
             };
             return (
-                <button onClick={onClick} disabled={disabled} className={`${base} ${styles[variant]} ${className}`}>
+                <button onClick={onClick} disabled={disabled} className={`\( {base} \){styles[variant]} ${className}`}>
                 {Icon && <Icon size={20} />}
                 {children}
                 </button>
@@ -161,7 +126,7 @@
 
         // --- VIEW COMPONENTS ---
 
-        const LoginView = ({ onLogin }) => {
+        const LoginView = () => {
             const [isRegistering, setIsRegistering] = useState(false);
             const [email, setEmail] = useState('');
             const [password, setPassword] = useState('');
@@ -173,17 +138,16 @@
                 e.preventDefault(); setError(''); setLoading(true);
                 try {
                     if (isRegistering) {
-                        const cred = await createUserWithEmailAndPassword(auth, email, password);
-                        if (name) await updateProfile(cred.user, { displayName: name });
+                        const cred = await auth.createUserWithEmailAndPassword(email, password);
+                        if (name) await cred.user.updateProfile({ displayName: name });
                     } else {
-                        await signInWithEmailAndPassword(auth, email, password);
+                        await auth.signInWithEmailAndPassword(email, password);
                     }
                 } catch (err) { setError(err.message); setLoading(false); }
             };
 
             return (
             <div className="flex flex-col items-center justify-center min-h-screen p-8 text-center max-w-sm mx-auto animate-in fade-in">
-                {/* CORREGIDO: Sin rotación */}
                 <div className="bg-[#1A4D2E] p-6 rounded-[2rem] shadow-2xl mb-8 transform transition-transform hover:scale-105">
                     <CreditCard className="text-[#D4AF37]" size={48} />
                 </div>
@@ -331,7 +295,7 @@
             if (prevSpent > 0) {
                 const diff = totalSpent - prevSpent;
                 const percent = ((diff / prevSpent) * 100).toFixed(0);
-                comparisonText = diff > 0 ? `${percent}% más que el mes pasado` : `${Math.abs(percent)}% menos que el mes pasado`;
+                comparisonText = diff > 0 ? `\( {percent}% más que el mes pasado` : ` \){Math.abs(percent)}% menos que el mes pasado`;
             }
 
             const chartData = useMemo(() => {
@@ -383,7 +347,6 @@
                     </div>
                 </div>
                 
-                {/* CORREGIDO: Renderizado de Recharts */}
                 <div className="bg-white p-6 rounded-3xl shadow-sm h-80 w-full relative">
                     {chartData.length > 0 ? (
                         <ResponsiveContainer width="100%" height="100%">
@@ -497,7 +460,7 @@
                         <div className="flex flex-col items-center mb-8 w-full">
                             <p className="text-sm text-gray-500 mb-2 uppercase tracking-widest">Monto ({currency})</p>
                             <div className="relative w-full flex justify-center">
-                                <span className="absolute left-[15%] top-1/2 -translate-y-1/2 text-3xl text-gray-400 font-serif">{currency === 'NIO' ? 'C$' : '$'}</span>
+                                <span className="absolute left-[15%] top-1/2 -translate-y-1/2 text-3xl text-gray-400 font-serif">{currency === 'NIO' ? 'C\( ' : ' \)'}</span>
                                 <input 
                                 type="number" 
                                 inputMode="decimal"
@@ -761,7 +724,7 @@
             const [isShortcutManagerOpen, setIsShortcutManagerOpen] = useState(false);
 
             useEffect(() => {
-                const unsubscribe = onAuthStateChanged(auth, (u) => {
+                const unsubscribe = auth.onAuthStateChanged((u) => {
                     setUser(u);
                     setAuthLoading(false);
                 });
@@ -770,22 +733,22 @@
 
             useEffect(() => {
                 if (!user) return;
-                const txQuery = query(collection(db, 'artifacts', appId, 'users', user.uid, 'transactions'), orderBy('date', 'desc'));
-                const unsubTx = onSnapshot(txQuery, (snap) => setTransactions(snap.docs.map(doc => ({ id: doc.id, ...doc.data() }))));
+                const txQuery = db.collection(`artifacts/\( {appId}/users/ \){user.uid}/transactions`).orderBy('date', 'desc');
+                const unsubTx = txQuery.onSnapshot((snap) => setTransactions(snap.docs.map(doc => ({ id: doc.id, ...doc.data() }))));
 
-                const settingsRef = doc(db, 'artifacts', appId, 'users', user.uid, 'settings', 'config');
-                const unsubSettings = onSnapshot(settingsRef, (snap) => {
-                    if (snap.exists()) {
+                const settingsRef = db.doc(`artifacts/\( {appId}/users/ \){user.uid}/settings/config`);
+                const unsubSettings = settingsRef.onSnapshot((snap) => {
+                    if (snap.exists) {
                         const data = snap.data();
                         if (data.exchangeRate) setExchangeRate(data.exchangeRate);
                         if (data.shortcuts) setShortcuts(data.shortcuts);
                     } else {
-                        setDoc(settingsRef, { exchangeRate: 36.60, shortcuts: DEFAULT_SHORTCUTS }, { merge: true });
+                        settingsRef.set({ exchangeRate: 36.60, shortcuts: DEFAULT_SHORTCUTS }, { merge: true });
                     }
                 });
 
-                const eventsQuery = query(collection(db, 'artifacts', appId, 'users', user.uid, 'events'), orderBy('createdAt', 'desc'));
-                const unsubEvents = onSnapshot(eventsQuery, (snap) => setEvents(snap.docs.map(doc => ({ id: doc.id, ...doc.data() }))));
+                const eventsQuery = db.collection(`artifacts/\( {appId}/users/ \){user.uid}/events`).orderBy('createdAt', 'desc');
+                const unsubEvents = eventsQuery.onSnapshot((snap) => setEvents(snap.docs.map(doc => ({ id: doc.id, ...doc.data() }))));
 
                 return () => { unsubTx(); unsubSettings(); unsubEvents(); };
             }, [user]);
@@ -811,12 +774,12 @@
             const handleAddTransaction = async (data) => {
                 if (!user) return;
                 const finalAmount = currency === 'USD' ? data.amount * exchangeRate : data.amount;
-                await addDoc(collection(db, 'artifacts', appId, 'users', user.uid, 'transactions'), {
+                await db.collection(`artifacts/\( {appId}/users/ \){user.uid}/transactions`).add({
                     amount: finalAmount,
                     categoryId: data.type === 'income' ? 'income' : data.category.id,
                     categoryName: data.type === 'income' ? 'Ingreso' : data.category.name,
                     note: data.note || (data.type === 'income' ? 'Ingreso' : data.category.name),
-                    date: Timestamp.now(),
+                    date: firebase.firestore.Timestamp.now(),
                     type: data.type,
                     eventId: data.eventId
                 });
@@ -825,12 +788,12 @@
             const handleQuickAdd = async (shortcut) => {
                 if (!user) return;
                 const catObj = CATEGORIES.find(c => c.id === shortcut.categoryId) || CATEGORIES[1];
-                await addDoc(collection(db, 'artifacts', appId, 'users', user.uid, 'transactions'), {
+                await db.collection(`artifacts/\( {appId}/users/ \){user.uid}/transactions`).add({
                 amount: shortcut.amount,
                 categoryId: catObj.id,
                 categoryName: catObj.name,
                 note: shortcut.name,
-                date: Timestamp.now(),
+                date: firebase.firestore.Timestamp.now(),
                 type: 'expense',
                 eventId: null
                 });
@@ -838,23 +801,35 @@
 
             const handleShortcutAdd = async (newSc) => {
                 const updated = [...shortcuts, { ...newSc, id: Date.now().toString(), type: 'expense' }];
-                await setDoc(doc(db, 'artifacts', appId, 'users', user.uid, 'settings', 'config'), { shortcuts: updated }, { merge: true });
+                await db.doc(`artifacts/\( {appId}/users/ \){user.uid}/settings/config`).set({ shortcuts: updated }, { merge: true });
             };
 
             const handleShortcutDelete = async (id) => {
                 const updated = shortcuts.filter(s => s.id !== id);
-                await setDoc(doc(db, 'artifacts', appId, 'users', user.uid, 'settings', 'config'), { shortcuts: updated }, { merge: true });
+                await db.doc(`artifacts/\( {appId}/users/ \){user.uid}/settings/config`).set({ shortcuts: updated }, { merge: true });
             };
 
             const handleAddEvent = async (name, budget) => {
                 if(!name || !user) return;
-                await addDoc(collection(db, 'artifacts', appId, 'users', user.uid, 'events'), {
-                    name, budget: parseFloat(budget) || 0, createdAt: Timestamp.now()
+                await db.collection(`artifacts/\( {appId}/users/ \){user.uid}/events`).add({
+                    name, budget: parseFloat(budget) || 0, createdAt: firebase.firestore.Timestamp.now()
                 });
             }
 
+            const handleDeleteEvent = async (id) => {
+                if (!user) return;
+                await db.doc(`artifacts/\( {appId}/users/ \){user.uid}/events/${id}`).delete();
+            }
+
+            const handleUpdateExchange = async (val) => {
+                setExchangeRate(val);
+                await db.doc(`artifacts/\( {appId}/users/ \){user.uid}/settings/config`).set({ exchangeRate: val }, { merge: true });
+            }
+
+            const handleLogout = () => auth.signOut();
+
             if (authLoading) return <div className="min-h-screen bg-[#F9F7F2] flex items-center justify-center"><div className="animate-spin rounded-full h-10 w-10 border-b-2 border-[#1A4D2E]"></div></div>;
-            if (!user) return <div className={`min-h-screen ${THEME.bg} text-[#2D2D2D] font-sans`}><LoginView /></div>;
+            if (!user) return <LoginView />;
 
             return (
                 <div className={`min-h-screen ${THEME.bg} text-[#2D2D2D] font-sans overflow-x-hidden`}>
@@ -866,8 +841,8 @@
                         exchangeRate={exchangeRate}
                     />}
                     {view === 'stats' && <StatsView transactions={transactions} currency={currency} exchangeRate={exchangeRate} />}
-                    {view === 'goals' && <MetasView events={events} transactions={transactions} user={user} onAddEvent={handleAddEvent} onDeleteEvent={(id) => deleteDoc(doc(db, 'artifacts', appId, 'users', user.uid, 'events', id))} />}
-                    {view === 'settings' && <SettingsView user={user} exchangeRate={exchangeRate} onLogout={() => signOut(auth)} onUpdateExchange={(val) => { setExchangeRate(val); setDoc(doc(db, 'artifacts', appId, 'users', user.uid, 'settings', 'config'), { exchangeRate: val }, { merge: true }); }} />}
+                    {view === 'goals' && <MetasView events={events} transactions={transactions} user={user} onAddEvent={handleAddEvent} onDeleteEvent={handleDeleteEvent} />}
+                    {view === 'settings' && <SettingsView user={user} exchangeRate={exchangeRate} onLogout={handleLogout} onUpdateExchange={handleUpdateExchange} />}
                 </main>
 
                 <div className="fixed bottom-8 left-1/2 -translate-x-1/2 z-40">
