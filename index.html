@@ -1,27 +1,915 @@
-<!doctype html>
+<!DOCTYPE html>
 <html lang="es">
-  <head>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
-    <title>NicaWallet Gold</title>
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>NicaWallet</title>
+    
+    <!-- 1. Tailwind CSS (Estilos) -->
     <script src="https://cdn.tailwindcss.com"></script>
+    
+    <!-- 2. React y ReactDOM -->
+    <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+    <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+    
+    <!-- 3. Babel (Para entender el código JSX) -->
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+
+    <!-- 4. Recharts (Gráficos) -->
+    <script src="https://unpkg.com/recharts/umd/Recharts.js"></script>
+
+    <!-- 5. Lucide Icons (Iconos) -->
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <!-- Wrapper para usar Lucide en React sin build step -->
     <script>
-      tailwind.config = {
-        theme: {
-          extend: {
-            colors: {
-              primary: '#1A4D2E',
-              accent: '#D4AF37',
-              cream: '#F9F7F2',
-            }
-          }
-        }
-      }
+        // Pequeño helper para renderizar iconos Lucide en React puro
+        const Icon = ({ name, size = 24, className, style }) => {
+            const lucideIcon = window.lucide.icons[name];
+            if (!lucideIcon) return null;
+            
+            // Convertimos el SVG string a elementos React (simplificado)
+            // Para esta versión sin build, usaremos un truco: dangerouslySetInnerHTML
+            // Nota: En producción real se usa la librería lucide-react, aquí usamos lucide global
+            
+            // Mejor aproximación para este entorno: Usar imagen SVG directa manipulada
+            // O mapear manualmente los iconos más importantes si fallara la carga dinámica.
+            // Para simplicidad y robustez en "un solo archivo", usaremos los nombres directos.
+        };
     </script>
-  </head>
-  <body class="bg-[#F9F7F2]">
+
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=DM+Sans:opsz,wght@9..40,400;500;700&family=Playfair+Display:ital,wght@0,400;0,600;0,700;1,400&display=swap');
+        body { font-family: 'DM Sans', sans-serif; background-color: #F9F7F2; }
+        .font-serif { font-family: 'Playfair Display', serif; }
+        .scrollbar-hide::-webkit-scrollbar { display: none; }
+        .scrollbar-hide { -ms-overflow-style: none; scrollbar-width: none; }
+        
+        /* Ajuste para impresión */
+        @media print {
+            body * { visibility: hidden; }
+            #printable-area, #printable-area * { visibility: visible; }
+            #printable-area { position: absolute; left: 0; top: 0; width: 100%; }
+        }
+    </style>
+</head>
+<body>
     <div id="root"></div>
-    <script type="module" src="./src/main.jsx"></script>
-  </body>
+
+    <!-- Import Map para que el navegador entienda los imports modernos -->
+    <script type="importmap">
+    {
+        "imports": {
+            "react": "https://esm.sh/react@18.2.0",
+            "react-dom/client": "https://esm.sh/react-dom@18.2.0/client",
+            "lucide-react": "https://esm.sh/lucide-react@0.294.0",
+            "recharts": "https://esm.sh/recharts@2.10.3",
+            "firebase/app": "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js",
+            "firebase/auth": "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js",
+            "firebase/firestore": "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js"
+        }
+    }
+    </script>
+
+    <!-- LÓGICA DE LA APLICACIÓN -->
+    <script type="text/babel" data-type="module">
+        import React, { useState, useEffect, useMemo } from 'react';
+        import ReactDOM from 'react-dom/client';
+        
+        // Importamos Iconos
+        import { 
+            Plus, Settings, CreditCard, Wallet, Calendar, Coffee, ShoppingBag, 
+            Car, Zap, TrendingUp, X, Check, Briefcase, Plane, Trash2, LogOut, 
+            TrendingDown, DollarSign, Edit3, Target, Umbrella, Gift, Smartphone, 
+            ChevronLeft, ChevronRight, Filter, FileText, Lock, Mail
+        } from 'lucide-react';
+
+        // Importamos Firebase
+        import { initializeApp } from "firebase/app";
+        import { 
+            getAuth, onAuthStateChanged, signInWithEmailAndPassword, 
+            createUserWithEmailAndPassword, signOut, updateProfile 
+        } from "firebase/auth";
+        import { 
+            getFirestore, collection, addDoc, query, orderBy, onSnapshot, 
+            deleteDoc, doc, setDoc, Timestamp 
+        } from "firebase/firestore";
+
+        // Importamos Recharts
+        import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip } from 'recharts';
+
+        // --- CONFIGURACIÓN FIREBASE ---
+        const firebaseConfig = {
+            apiKey: "AIzaSyAzhISkpS1PpfyA4gXngKxvsYbMv4bOFFo",
+            authDomain: "nicawallett.firebaseapp.com",
+            projectId: "nicawallett",
+            storageBucket: "nicawallett.firebasestorage.app",
+            messagingSenderId: "1087542817342",
+            appId: "1:1087542817342:web:ccd126bd991b86e43bd76f"
+        };
+
+        const app = initializeApp(firebaseConfig);
+        const auth = getAuth(app);
+        const db = getFirestore(app);
+        const appId = 'production-app-v1'; // ID fijo para producción
+
+        // --- CONSTANTES ---
+        const THEME = {
+            bg: "bg-[#F9F7F2]", 
+            textMain: "text-[#2D2D2D]", 
+            primary: "bg-[#1A4D2E]", 
+            accent: "bg-[#D4AF37]", 
+        };
+
+        const COLORS = ['#1A4D2E', '#D4AF37', '#8B0000', '#2C3E50', '#A67B5B', '#5C7C8A', '#E67E22', '#8E44AD'];
+        const ALL_ICONS = { Coffee, ShoppingBag, Car, Zap, Calendar, Plane, Briefcase, TrendingUp, DollarSign, Target, Umbrella, Gift, Smartphone };
+
+        const CATEGORIES = [
+            { id: 'income', name: 'Ingreso', icon: DollarSign, color: '#1A4D2E' },
+            { id: 'food', name: 'Comida', icon: Coffee, color: '#A67B5B' },
+            { id: 'transport', name: 'Transporte', icon: Car, color: '#5C7C8A' },
+            { id: 'shopping', name: 'Compras', icon: ShoppingBag, color: '#D4AF37' },
+            { id: 'bills', name: 'Servicios', icon: Zap, color: '#1A4D2E' },
+            { id: 'entertainment', name: 'Ocio', icon: Calendar, color: '#8B4513' },
+            { id: 'travel', name: 'Viajes', icon: Plane, color: '#2C3E50' },
+            { id: 'work', name: 'Negocios', icon: Briefcase, color: '#344955' },
+        ];
+
+        const DEFAULT_SHORTCUTS = [
+            { id: 's1', name: 'Café', amount: 60, icon: 'Coffee', color: '#A67B5B', type: 'expense', categoryId: 'food' },
+            { id: 's2', name: 'Taxi', amount: 150, icon: 'Car', color: '#5C7C8A', type: 'expense', categoryId: 'transport' },
+        ];
+
+        // --- UI COMPONENTS ---
+        const Button = ({ children, onClick, variant = "primary", className = "", icon: Icon, disabled = false }) => {
+            const base = "px-6 py-3 rounded-2xl font-medium transition-all active:scale-95 flex items-center justify-center gap-2 shadow-sm disabled:opacity-50 disabled:cursor-not-allowed";
+            const styles = {
+                primary: `${THEME.primary} text-white hover:bg-[#143d24]`,
+                ghost: "bg-transparent text-[#2D2D2D] hover:bg-black/5",
+            };
+            return (
+                <button onClick={onClick} disabled={disabled} className={`${base} ${styles[variant]} ${className}`}>
+                {Icon && <Icon size={20} />}
+                {children}
+                </button>
+            );
+        };
+
+        const formatMoney = (amount, currency, exchangeRate) => {
+            if (currency === 'NIO') return `C$ ${amount.toLocaleString('es-NI', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+            return `$ ${(amount / exchangeRate).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+        };
+
+        // --- VIEW COMPONENTS ---
+
+        const LoginView = ({ onLogin }) => {
+            const [isRegistering, setIsRegistering] = useState(false);
+            const [email, setEmail] = useState('');
+            const [password, setPassword] = useState('');
+            const [name, setName] = useState('');
+            const [error, setError] = useState('');
+            const [loading, setLoading] = useState(false);
+
+            const handleAuth = async (e) => {
+                e.preventDefault(); setError(''); setLoading(true);
+                try {
+                    if (isRegistering) {
+                        const cred = await createUserWithEmailAndPassword(auth, email, password);
+                        if (name) await updateProfile(cred.user, { displayName: name });
+                    } else {
+                        await signInWithEmailAndPassword(auth, email, password);
+                    }
+                } catch (err) { setError(err.message); setLoading(false); }
+            };
+
+            return (
+            <div className="flex flex-col items-center justify-center min-h-screen p-8 text-center max-w-sm mx-auto animate-in fade-in">
+                {/* CORREGIDO: Sin rotación */}
+                <div className="bg-[#1A4D2E] p-6 rounded-[2rem] shadow-2xl mb-8 transform transition-transform hover:scale-105">
+                    <CreditCard className="text-[#D4AF37]" size={48} />
+                </div>
+                <h1 className="font-serif text-3xl font-bold text-[#1A4D2E] mb-2">NicaWallet</h1>
+                <p className="text-gray-500 font-serif italic mb-8">Diamond Edition</p>
+                <form onSubmit={handleAuth} className="w-full space-y-4">
+                    {isRegistering && <input type="text" placeholder="Nombre" value={name} onChange={e=>setName(e.target.value)} className="w-full p-4 rounded-xl bg-white border border-gray-200" required />}
+                    <input type="email" placeholder="Correo" value={email} onChange={e=>setEmail(e.target.value)} className="w-full p-4 rounded-xl bg-white border border-gray-200" required />
+                    <input type="password" placeholder="Contraseña" value={password} onChange={e=>setPassword(e.target.value)} className="w-full p-4 rounded-xl bg-white border border-gray-200" required />
+                    {error && <p className="text-red-500 text-xs">{error}</p>}
+                    <Button className="w-full py-4" disabled={loading}>{loading ? '...' : (isRegistering ? 'Crear Cuenta' : 'Entrar')}</Button>
+                </form>
+                <button onClick={() => setIsRegistering(!isRegistering)} className="mt-6 text-sm text-[#1A4D2E] font-bold hover:underline">
+                    {isRegistering ? '¿Ya tienes cuenta? Entrar' : '¿Nuevo? Crear Cuenta'}
+                </button>
+            </div>
+            );
+        };
+
+        const DashboardView = ({ user, currency, setCurrency, totals, shortcuts, transactions, handleQuickAdd, setIsShortcutManagerOpen, exchangeRate }) => (
+            <div className="space-y-6 pb-24 animate-in fade-in">
+                <div className="flex justify-between items-center pt-2">
+                    <div className="flex items-center gap-3">
+                        <div className="w-10 h-10 rounded-full bg-[#1A4D2E] text-white flex items-center justify-center font-serif font-bold text-lg">
+                            {user.displayName ? user.displayName.charAt(0) : 'U'}
+                        </div>
+                        <div>
+                            <p className="text-xs text-gray-400 uppercase tracking-widest">Hola,</p>
+                            <h2 className="font-serif text-lg font-bold text-[#2D2D2D] truncate max-w-[150px]">{user.displayName || 'Usuario'}</h2>
+                        </div>
+                    </div>
+                    <button onClick={() => setCurrency(c => c === 'NIO' ? 'USD' : 'NIO')} className="bg-white border border-[#D4AF37] px-3 py-1 rounded-full text-xs font-bold text-[#D4AF37] shadow-sm">
+                        {currency}
+                    </button>
+                </div>
+
+                <div className={`relative overflow-hidden w-full rounded-[2rem] ${THEME.primary} p-6 text-white shadow-2xl shadow-[#1A4D2E]/30 flex flex-col justify-between min-h-[220px]`}>
+                    <div className="absolute -right-10 -top-10 w-48 h-48 bg-[#ffffff10] rounded-full blur-3xl"></div>
+                    <div className="absolute -left-10 -bottom-10 w-40 h-40 bg-[#D4AF37] opacity-20 rounded-full blur-3xl"></div>
+                    <div className="relative z-10 mb-6 flex justify-between">
+                        <div>
+                            <span className="font-mono opacity-60 text-xs tracking-[0.2em] uppercase">Balance Total</span>
+                            <h1 className="font-serif text-4xl font-medium tracking-tight mt-1">{formatMoney(totals.totalBalance, currency, exchangeRate)}</h1>
+                        </div>
+                        <CreditCard className="text-[#D4AF37] opacity-80" size={32} />
+                    </div>
+                    <div className="relative z-10 grid grid-cols-2 gap-4 mt-auto">
+                        <div className="bg-white/10 rounded-xl p-3 backdrop-blur-sm">
+                            <div className="flex items-center gap-1 mb-1 opacity-70"><TrendingUp size={14} className="text-green-300"/><span className="text-[10px] uppercase">Ingresos</span></div>
+                            <p className="font-medium">{formatMoney(totals.monthIncome, currency, exchangeRate)}</p>
+                        </div>
+                        <div className="bg-white/10 rounded-xl p-3 backdrop-blur-sm">
+                            <div className="flex items-center gap-1 mb-1 opacity-70"><TrendingDown size={14} className="text-red-300"/><span className="text-[10px] uppercase">Gastos</span></div>
+                            <p className="font-medium">{formatMoney(totals.monthExpense, currency, exchangeRate)}</p>
+                        </div>
+                    </div>
+                </div>
+
+                <div>
+                    <div className="flex justify-between items-center mb-3 ml-1">
+                        <h3 className="text-xs font-bold uppercase tracking-widest text-[#666666]">Accesos Rápidos</h3>
+                        <button onClick={() => setIsShortcutManagerOpen(true)} className="text-xs text-[#D4AF37] font-medium flex items-center gap-1 hover:underline">
+                            <Edit3 size={12} /> Editar
+                        </button>
+                    </div>
+                    <div className="flex overflow-x-auto snap-x space-x-4 pb-4 -mx-4 px-4 scrollbar-hide">
+                        {shortcuts.map(sc => {
+                            const IconComp = ALL_ICONS[sc.icon] || ShoppingBag;
+                            return (
+                                <button key={sc.id} onClick={() => handleQuickAdd(sc)} className="snap-center flex-shrink-0 w-24 h-28 bg-white rounded-2xl flex flex-col items-center justify-center gap-2 shadow-sm border border-transparent active:border-[#D4AF37] active:scale-95 transition-all">
+                                    <div className="p-3 rounded-full bg-opacity-10" style={{backgroundColor: sc.color+'20'}}>
+                                        <IconComp size={22} style={{color: sc.color}} />
+                                    </div>
+                                    <span className="text-xs font-medium text-gray-600 truncate w-full px-2">{sc.name}</span>
+                                    <span className="text-[10px] font-bold text-red-700">-{formatMoney(sc.amount, currency, exchangeRate)}</span>
+                                </button>
+                            )
+                        })}
+                    </div>
+                </div>
+
+                <div>
+                    <h3 className="text-xs font-bold uppercase tracking-widest text-[#666666] mb-3 ml-1">Recientes</h3>
+                    <div className="space-y-3">
+                        {transactions.slice(0, 5).map(tx => {
+                            const cat = CATEGORIES.find(c => c.id === tx.categoryId) || { icon: DollarSign, color: '#1A4D2E' };
+                            const isExp = tx.type === 'expense';
+                            return (
+                                <div key={tx.id} className="bg-white p-4 rounded-2xl flex items-center justify-between shadow-sm">
+                                    <div className="flex items-center gap-4">
+                                        <div className="p-3 rounded-xl" style={{backgroundColor: isExp ? cat.color+'15' : '#E8F5E9'}}>
+                                            <cat.icon size={20} style={{color: isExp ? cat.color : '#1A4D2E'}} />
+                                        </div>
+                                        <div>
+                                            <p className="font-medium text-[#2D2D2D] line-clamp-1">{tx.note}</p>
+                                            <p className="text-xs text-gray-400">{tx.date.toDate().toLocaleDateString('es-NI', {weekday:'short', day:'numeric'})}</p>
+                                        </div>
+                                    </div>
+                                    <div className="text-right">
+                                        <p className={`font-bold font-serif ${isExp ? 'text-[#2D2D2D]' : 'text-[#1A4D2E]'}`}>
+                                            {isExp ? '-' : '+'}{formatMoney(tx.amount, currency, exchangeRate)}
+                                        </p>
+                                    </div>
+                                </div>
+                            )
+                        })}
+                        {transactions.length === 0 && <div className="text-center py-8 text-gray-400 italic">Sin movimientos</div>}
+                    </div>
+                </div>
+            </div>
+        );
+
+        const StatsView = ({ transactions, currency, exchangeRate }) => {
+            const [currentDate, setCurrentDate] = useState(new Date());
+
+            const handlePrevMonth = () => setCurrentDate(prev => new Date(prev.getFullYear(), prev.getMonth() - 1, 1));
+            const handleNextMonth = () => {
+                const next = new Date(currentDate.getFullYear(), currentDate.getMonth() + 1, 1);
+                if (next <= new Date()) setCurrentDate(next);
+            }
+
+            const monthData = useMemo(() => {
+                const m = currentDate.getMonth();
+                const y = currentDate.getFullYear();
+                return transactions.filter(t => {
+                    const d = t.date.toDate();
+                    return d.getMonth() === m && d.getFullYear() === y && t.type === 'expense';
+                });
+            }, [transactions, currentDate]);
+
+            const prevMonthData = useMemo(() => {
+                const prevD = new Date(currentDate.getFullYear(), currentDate.getMonth() - 1, 1);
+                const m = prevD.getMonth();
+                const y = prevD.getFullYear();
+                return transactions.filter(t => {
+                    const d = t.date.toDate();
+                    return d.getMonth() === m && d.getFullYear() === y && t.type === 'expense';
+                });
+            }, [transactions, currentDate]);
+
+            const totalSpent = monthData.reduce((acc, t) => acc + t.amount, 0);
+            const prevSpent = prevMonthData.reduce((acc, t) => acc + t.amount, 0);
+            
+            let comparisonText = "Sin datos previos";
+            if (prevSpent > 0) {
+                const diff = totalSpent - prevSpent;
+                const percent = ((diff / prevSpent) * 100).toFixed(0);
+                comparisonText = diff > 0 ? `${percent}% más que el mes pasado` : `${Math.abs(percent)}% menos que el mes pasado`;
+            }
+
+            const chartData = useMemo(() => {
+                const grouped = {};
+                monthData.forEach(t => {
+                    const catId = t.categoryId || 'unknown';
+                    grouped[catId] = (grouped[catId] || 0) + t.amount;
+                });
+                const total = Object.values(grouped).reduce((a,b) => a+b, 0);
+                return Object.keys(grouped).map(k => {
+                const cat = CATEGORIES.find(c => c.id === k) || { name: 'Otros', color: '#ccc' };
+                return {
+                    name: cat.name,
+                    value: grouped[k],
+                    color: cat.color,
+                    percent: total > 0 ? (grouped[k] / total * 100).toFixed(1) : 0
+                }
+                }).sort((a,b) => b.value - a.value);
+            }, [monthData]);
+
+            const handlePrintPDF = () => {
+                window.print();
+            }
+
+            return (
+            <div className="space-y-6 pb-24 pt-4 animate-in fade-in">
+                <div className="flex justify-between items-center">
+                    <h2 className="font-serif text-3xl font-bold text-[#1A4D2E]">Análisis</h2>
+                    <button onClick={handlePrintPDF} className="flex items-center gap-2 text-sm text-[#1A4D2E] bg-white px-3 py-2 rounded-xl shadow-sm">
+                        <FileText size={16}/> PDF
+                    </button>
+                </div>
+                
+                <div className="flex items-center justify-between bg-white p-2 rounded-2xl shadow-sm">
+                    <button onClick={handlePrevMonth} className="p-2 hover:bg-gray-100 rounded-xl"><ChevronLeft size={20}/></button>
+                    <div className="text-center">
+                        <span className="block font-bold text-[#2D2D2D] capitalize">
+                            {currentDate.toLocaleDateString('es-NI', { month: 'long', year: 'numeric' })}
+                        </span>
+                    </div>
+                    <button onClick={handleNextMonth} disabled={currentDate.getMonth() === new Date().getMonth() && currentDate.getFullYear() === new Date().getFullYear()} className="p-2 hover:bg-gray-100 rounded-xl disabled:opacity-30"><ChevronRight size={20}/></button>
+                </div>
+
+                <div className="bg-[#1A4D2E] text-white p-6 rounded-3xl shadow-lg">
+                    <p className="text-xs uppercase tracking-widest opacity-70 mb-1">Gasto Total (Mes)</p>
+                    <h3 className="text-3xl font-serif font-bold mb-2">{formatMoney(totalSpent, currency, exchangeRate)}</h3>
+                    <div className={`text-xs font-bold bg-white/10 inline-block px-3 py-1 rounded-lg`}>
+                        {comparisonText}
+                    </div>
+                </div>
+                
+                {/* CORREGIDO: Renderizado de Recharts */}
+                <div className="bg-white p-6 rounded-3xl shadow-sm h-80 w-full relative">
+                    {chartData.length > 0 ? (
+                        <ResponsiveContainer width="100%" height="100%">
+                            <PieChart>
+                                <Pie
+                                    data={chartData}
+                                    cx="50%"
+                                    cy="50%"
+                                    innerRadius={60}
+                                    outerRadius={80}
+                                    paddingAngle={5}
+                                    dataKey="value"
+                                >
+                                    {chartData.map((entry, index) => (
+                                        <Cell key={`cell-${index}`} fill={entry.color} stroke="none" />
+                                    ))}
+                                </Pie>
+                                <Tooltip />
+                            </PieChart>
+                        </ResponsiveContainer>
+                    ) : (
+                        <div className="flex flex-col items-center justify-center h-full text-gray-400">
+                            <Filter size={40} className="mb-2 opacity-20"/>
+                            <p className="italic">Sin gastos este mes</p>
+                        </div>
+                    )}
+                </div>
+
+                <div className="space-y-3">
+                    {chartData.map(item => (
+                        <div key={item.name} className="flex items-center justify-between p-4 bg-white rounded-2xl border border-transparent hover:border-gray-200">
+                            <div className="flex items-center gap-3">
+                                <div className="w-3 h-3 rounded-full" style={{background: item.color}}></div>
+                                <span className="font-medium text-[#2D2D2D]">{item.name}</span>
+                            </div>
+                            <div className="text-right">
+                                <p className="font-bold text-sm">{formatMoney(item.value, currency, exchangeRate)}</p>
+                                <p className="text-[10px] text-gray-400">{item.percent}%</p>
+                            </div>
+                        </div>
+                    ))}
+                </div>
+
+                <div id="printable-area" className="hidden">
+                    <div className="p-8 font-serif">
+                        <h1 className="text-2xl font-bold mb-4 text-[#1A4D2E]">Reporte de Gastos NicaWallet</h1>
+                        <p className="mb-8 text-gray-500 capitalize">{currentDate.toLocaleDateString('es-NI', { month: 'long', year: 'numeric' })}</p>
+                        <div className="mb-8 p-4 border rounded">
+                        <p>Total Gastado: <b>{formatMoney(totalSpent, currency, exchangeRate)}</b></p>
+                        </div>
+                        <table className="w-full text-left border-collapse">
+                            <thead>
+                                <tr className="border-b-2 border-black">
+                                    <th className="py-2">Fecha</th>
+                                    <th className="py-2">Categoría</th>
+                                    <th className="py-2">Nota</th>
+                                    <th className="py-2 text-right">Monto</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {monthData.map(t => (
+                                    <tr key={t.id} className="border-b border-gray-200">
+                                        <td className="py-2">{t.date.toDate().toLocaleDateString()}</td>
+                                        <td className="py-2">{t.categoryName}</td>
+                                        <td className="py-2">{t.note}</td>
+                                        <td className="py-2 text-right font-bold">{formatMoney(t.amount, currency, exchangeRate)}</td>
+                                    </tr>
+                                ))}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+            );
+        };
+
+        const AddTransactionModal = ({ isOpen, onClose, currency, exchangeRate, categories, events, onSave }) => {
+            const [transType, setTransType] = useState('expense');
+            const [transAmount, setTransAmount] = useState('');
+            const [transCategory, setTransCategory] = useState(categories[1]);
+            const [transNote, setTransNote] = useState('');
+            const [transEventId, setTransEventId] = useState(null);
+
+            useEffect(() => {
+                if (!isOpen) {
+                    setTransAmount(''); setTransNote(''); setTransEventId(null);
+                }
+            }, [isOpen]);
+
+            const handleSubmit = () => {
+                const amount = parseFloat(transAmount);
+                if(isNaN(amount) || amount <= 0) return;
+                onSave({ amount, type: transType, category: transCategory, note: transNote, eventId: transEventId });
+                onClose();
+            }
+
+            if (!isOpen) return null;
+
+            return (
+                <div className="fixed inset-0 z-50 bg-[#F9F7F2] flex flex-col animate-in slide-in-from-bottom duration-200">
+                    <div className="flex justify-between items-center p-6">
+                        <button onClick={onClose} className="p-2 bg-gray-200 rounded-full"><X size={24}/></button>
+                        <div className="flex bg-gray-200 p-1 rounded-full">
+                            <button onClick={() => setTransType('expense')} className={`px-4 py-1.5 rounded-full text-xs font-bold transition-all ${transType === 'expense' ? 'bg-white shadow-sm text-red-700' : 'text-gray-500'}`}>Gasto</button>
+                            <button onClick={() => setTransType('income')} className={`px-4 py-1.5 rounded-full text-xs font-bold transition-all ${transType === 'income' ? 'bg-white shadow-sm text-green-700' : 'text-gray-500'}`}>Ingreso</button>
+                        </div>
+                        <div className="w-10"></div>
+                    </div>
+                    
+                    <div className="flex-1 flex flex-col items-center pt-4 p-6 overflow-y-auto">
+                        <div className="flex flex-col items-center mb-8 w-full">
+                            <p className="text-sm text-gray-500 mb-2 uppercase tracking-widest">Monto ({currency})</p>
+                            <div className="relative w-full flex justify-center">
+                                <span className="absolute left-[15%] top-1/2 -translate-y-1/2 text-3xl text-gray-400 font-serif">{currency === 'NIO' ? 'C$' : '$'}</span>
+                                <input 
+                                type="number" 
+                                inputMode="decimal"
+                                value={transAmount}
+                                onChange={(e) => setTransAmount(e.target.value)}
+                                placeholder="0.00"
+                                autoFocus
+                                className={`w-full text-center text-6xl font-serif font-bold bg-transparent outline-none focus:outline-none placeholder:text-gray-200 ${transType === 'income' ? 'text-[#1A4D2E]' : 'text-[#2D2D2D]'}`}
+                                />
+                            </div>
+                        </div>
+
+                        {transType === 'expense' && (
+                            <div className="w-full mb-6">
+                                <p className="text-xs text-center mb-3 text-gray-400 uppercase tracking-widest">Categoría</p>
+                                <div className="flex justify-center gap-4 flex-wrap">
+                                    {categories.filter(c => c.id !== 'income').map(cat => (
+                                        <button key={cat.id} onClick={() => setTransCategory(cat)} className={`flex flex-col items-center gap-1 p-2 rounded-xl transition-all ${transCategory.id === cat.id ? 'scale-110 opacity-100' : 'opacity-40 grayscale'}`}>
+                                            <div className="p-3 rounded-full text-white shadow-md" style={{backgroundColor: cat.color}}><cat.icon size={20}/></div>
+                                            <span className="text-[10px] font-medium">{cat.name}</span>
+                                        </button>
+                                    ))}
+                                </div>
+                            </div>
+                        )}
+
+                        <div className="w-full mb-4">
+                            <input 
+                                type="text" 
+                                placeholder={transType === 'income' ? "Fuente" : "Nota"} 
+                                value={transNote} 
+                                onChange={e => setTransNote(e.target.value)} 
+                                className="w-full bg-white p-4 rounded-xl text-center text-gray-700 focus:outline-none shadow-sm border focus:border-[#D4AF37]" 
+                            />
+                        </div>
+
+                        {events.length > 0 && transType === 'expense' && (
+                            <div className="w-full">
+                                <p className="text-[10px] text-center mb-2 text-gray-400 uppercase">Asociar a Meta/Evento</p>
+                                <div className="flex gap-2 overflow-x-auto pb-2 justify-center scrollbar-hide">
+                                    <button onClick={() => setTransEventId(null)} className={`px-4 py-2 rounded-full text-xs font-bold border transition-all ${!transEventId ? 'bg-gray-800 text-white' : 'bg-white text-gray-500'}`}>Ninguno</button>
+                                    {events.map(ev => (
+                                        <button key={ev.id} onClick={() => setTransEventId(ev.id)} className={`px-4 py-2 rounded-full text-xs font-bold border transition-all ${transEventId === ev.id ? 'bg-[#D4AF37] text-white border-[#D4AF37]' : 'bg-white text-gray-500'}`}>{ev.name}</button>
+                                    ))}
+                                </div>
+                            </div>
+                        )}
+                        
+                        <div className="flex-1"></div>
+                        <Button onClick={handleSubmit} className="w-full py-4 shadow-lg shadow-[#1A4D2E]/20 text-lg mt-4">Guardar</Button>
+                    </div>
+                </div>
+            );
+        };
+
+        const ShortcutManagerModal = ({ isOpen, onClose, shortcuts, onAdd, onDelete, categories }) => {
+            if (!isOpen) return null;
+            const [name, setName] = useState('');
+            const [amount, setAmount] = useState('');
+            const [selectedIcon, setSelectedIcon] = useState('ShoppingBag');
+            const [selectedColor, setSelectedColor] = useState(COLORS[0]);
+            const [selectedCategory, setSelectedCategory] = useState(categories[1]);
+
+            const handleAdd = () => {
+                if(!name || !amount) return;
+                onAdd({ name, amount: parseFloat(amount), icon: selectedIcon, color: selectedColor, categoryId: selectedCategory.id });
+                setName(''); setAmount('');
+            }
+
+            return (
+                <div className="fixed inset-0 z-50 bg-black/50 backdrop-blur-sm flex items-end sm:items-center justify-center">
+                    <div className="bg-[#F9F7F2] w-full max-w-md h-[90vh] sm:h-auto rounded-t-[2rem] sm:rounded-[2rem] p-6 flex flex-col overflow-hidden animate-in slide-in-from-bottom">
+                        <div className="flex justify-between items-center mb-6">
+                            <h3 className="font-serif text-xl font-bold text-[#1A4D2E]">Editar Accesos Rápidos</h3>
+                            <button onClick={onClose} className="p-2 bg-gray-200 rounded-full"><X size={20}/></button>
+                        </div>
+                        <div className="overflow-y-auto flex-1 pr-2 scrollbar-hide">
+                            <div className="space-y-3 mb-8">
+                                {shortcuts.map(sc => {
+                                    const IconComp = ALL_ICONS[sc.icon] || ShoppingBag;
+                                    return (
+                                        <div key={sc.id} className="bg-white p-3 rounded-2xl flex justify-between items-center shadow-sm">
+                                            <div className="flex items-center gap-3">
+                                                <div className="p-2 rounded-xl" style={{backgroundColor: sc.color+'20'}}>
+                                                    <IconComp size={20} style={{color: sc.color}} />
+                                                </div>
+                                                <div>
+                                                    <p className="font-medium text-sm">{sc.name}</p>
+                                                    <div className="flex gap-2">
+                                                        <p className="text-xs text-gray-500">{sc.amount}</p>
+                                                        <span className="text-[10px] bg-gray-100 px-1 rounded text-gray-400">
+                                                            {categories.find(c => c.id === sc.categoryId)?.name || 'Gasto'}
+                                                        </span>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                            <button onClick={() => onDelete(sc.id)} className="text-red-400 p-2"><Trash2 size={18} /></button>
+                                        </div>
+                                    )
+                                })}
+                            </div>
+
+                            <div className="bg-white p-5 rounded-3xl shadow-sm border border-gray-100">
+                                <h4 className="text-xs font-bold uppercase tracking-widest text-gray-500 mb-4">Crear Nuevo Botón</h4>
+                                <div className="space-y-4">
+                                    <div className="flex flex-col gap-3">
+                                        <input value={name} onChange={e=>setName(e.target.value)} placeholder="Nombre (ej: Uber)" className="w-full bg-[#F9F7F2] p-3 rounded-xl text-sm outline-none" />
+                                        <input value={amount} onChange={e=>setAmount(e.target.value)} placeholder="Monto" type="number" className="w-full bg-[#F9F7F2] p-3 rounded-xl text-sm outline-none" />
+                                    </div>
+                                    
+                                    <div>
+                                        <p className="text-[10px] uppercase text-gray-400 mb-2">Categoría Real del Gasto</p>
+                                        <div className="flex gap-2 overflow-x-auto pb-2 scrollbar-hide">
+                                            {categories.filter(c => c.id !== 'income').map(cat => (
+                                                <button key={cat.id} onClick={() => setSelectedCategory(cat)} className={`p-2 rounded-xl flex-shrink-0 flex flex-col items-center gap-1 min-w-[60px] transition-all ${selectedCategory.id === cat.id ? 'bg-gray-100 scale-105 border border-gray-300' : 'opacity-50'}`}>
+                                                    <cat.icon size={16} color={cat.color}/>
+                                                    <span className="text-[9px]">{cat.name}</span>
+                                                </button>
+                                            ))}
+                                        </div>
+                                    </div>
+                                    
+                                    <Button onClick={handleAdd} className="w-full">Guardar Botón</Button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            );
+        };
+
+        const MetasView = ({ events, transactions, user, onAddEvent, onDeleteEvent }) => {
+            const [newEventName, setNewEventName] = useState('');
+            const [newEventBudget, setNewEventBudget] = useState('');
+            const [selectedEventId, setSelectedEventId] = useState(null);
+
+            const eventProgress = useMemo(() => {
+                const progress = {};
+                transactions.forEach(t => {
+                    if(t.eventId && t.type === 'expense') {
+                        progress[t.eventId] = (progress[t.eventId] || 0) + t.amount;
+                    }
+                });
+                return progress;
+            }, [transactions]);
+
+            if (selectedEventId) {
+                const event = events.find(e => e.id === selectedEventId);
+                const eventTxs = transactions.filter(t => t.eventId === selectedEventId);
+                
+                if(!event) { setSelectedEventId(null); return null; }
+
+                return (
+                    <div className="space-y-6 pb-24 pt-4 animate-in slide-in-from-right">
+                        <div className="flex items-center gap-2 mb-4">
+                            <button onClick={() => setSelectedEventId(null)} className="p-2 bg-white rounded-full shadow-sm"><ChevronLeft size={20}/></button>
+                            <h2 className="font-serif text-2xl font-bold text-[#1A4D2E] truncate">{event.name}</h2>
+                        </div>
+                        <div className="bg-[#1A4D2E] text-white p-6 rounded-3xl shadow-lg">
+                            <p className="opacity-70 text-xs uppercase mb-1">Presupuesto vs Gastado</p>
+                            <div className="flex justify-between items-end mb-2">
+                                <span className="text-3xl font-serif">C$ {eventProgress[event.id] || 0}</span>
+                                <span className="text-sm opacity-80 mb-1">/ C$ {event.budget}</span>
+                            </div>
+                            <div className="w-full h-2 bg-white/20 rounded-full overflow-hidden">
+                                <div className="h-full bg-[#D4AF37]" style={{ width: `${Math.min(((eventProgress[event.id] || 0)/event.budget)*100, 100)}%` }}></div>
+                            </div>
+                        </div>
+                        <div className="space-y-3">
+                            {eventTxs.length === 0 ? <p className="text-center text-gray-400 py-10 italic">Aún no hay gastos registrados.</p> : 
+                            eventTxs.map(tx => (
+                            <div key={tx.id} className="bg-white p-4 rounded-2xl flex items-center justify-between shadow-sm">
+                                <div className="flex items-center gap-3">
+                                    <div className="p-2 bg-gray-100 rounded-lg text-gray-600"><ShoppingBag size={18}/></div>
+                                    <div>
+                                        <p className="font-medium text-sm text-[#2D2D2D]">{tx.note}</p>
+                                        <p className="text-xs text-gray-400">{tx.date.toDate().toLocaleDateString()}</p>
+                                    </div>
+                                </div>
+                                <span className="font-bold text-[#1A4D2E]">-C$ {tx.amount}</span>
+                            </div>
+                            ))}
+                        </div>
+                    </div>
+                )
+            }
+
+            return (
+            <div className="space-y-6 pb-24 pt-4 animate-in fade-in">
+                <h2 className="font-serif text-3xl font-bold text-[#1A4D2E]">Metas & Eventos</h2>
+                <div className="bg-white p-6 rounded-3xl shadow-sm">
+                    <h3 className="text-xs font-bold uppercase tracking-widest text-[#666666] mb-4">Nuevo Objetivo</h3>
+                    <div className="flex flex-col gap-3">
+                        <input value={newEventName} onChange={(e) => setNewEventName(e.target.value)} placeholder="Nombre (ej: Boda)" className="bg-[#F9F7F2] p-3 rounded-xl text-sm outline-none" />
+                        <div className="flex gap-2">
+                            <input type="number" value={newEventBudget} onChange={(e) => setNewEventBudget(e.target.value)} placeholder="Presupuesto" className="flex-1 bg-[#F9F7F2] p-3 rounded-xl text-sm outline-none" />
+                            <Button onClick={() => { onAddEvent(newEventName, newEventBudget); setNewEventName(''); setNewEventBudget(''); }} className="px-6"><Plus size={20} /></Button>
+                        </div>
+                    </div>
+                </div>
+                <div className="space-y-4">
+                    {events.map(ev => {
+                        const spent = eventProgress[ev.id] || 0;
+                        const percent = Math.min((spent / (ev.budget || 1)) * 100, 100);
+                        return (
+                            <div key={ev.id} onClick={() => setSelectedEventId(ev.id)} className="bg-white p-5 rounded-3xl shadow-sm relative overflow-hidden group cursor-pointer active:scale-[0.98] transition-all">
+                                <div className="flex justify-between items-start mb-4 relative z-10">
+                                    <div><h4 className="font-serif font-bold text-lg text-[#1A4D2E]">{ev.name}</h4><p className="text-xs text-gray-400">Presupuesto: C$ {ev.budget}</p></div>
+                                    <button onClick={(e) => { e.stopPropagation(); onDeleteEvent(ev.id); }} className="text-gray-300 hover:text-red-400 p-2"><Trash2 size={16} /></button>
+                                </div>
+                                <div className="relative z-10">
+                                    <div className="w-full h-3 bg-[#F9F7F2] rounded-full overflow-hidden">
+                                        <div className="h-full bg-[#1A4D2E] transition-all duration-500 rounded-full" style={{ width: `${percent}%` }}></div>
+                                    </div>
+                                </div>
+                            </div>
+                        );
+                    })}
+                </div>
+            </div>
+            );
+        };
+
+        const SettingsView = ({ user, exchangeRate, onLogout, onUpdateExchange }) => {
+            return (
+            <div className="space-y-6 pb-24 pt-4 animate-in fade-in">
+                <h2 className="font-serif text-3xl font-bold text-[#1A4D2E]">Ajustes</h2>
+                <div className="bg-white p-6 rounded-3xl shadow-sm space-y-4">
+                    <div className="flex items-center gap-4">
+                        <div className="w-14 h-14 rounded-full bg-[#1A4D2E] text-white flex items-center justify-center text-2xl font-serif">{user.displayName?.charAt(0)}</div>
+                        <div className="flex-1"><p className="font-serif text-lg">{user.displayName}</p><p className="text-xs text-gray-400 mt-1">{user.email}</p></div>
+                    </div>
+                    <Button variant="ghost" className="w-full text-red-500 justify-start pl-0" onClick={onLogout}><LogOut size={16}/> Cerrar Sesión</Button>
+                </div>
+                <div className="bg-white p-6 rounded-3xl shadow-sm">
+                    <h3 className="text-xs font-bold uppercase tracking-widest text-gray-500 mb-4">Global</h3>
+                    <div className="flex justify-between items-center">
+                        <span>Tasa de Cambio (C$ / USD)</span>
+                        <input type="number" value={exchangeRate} onChange={e=> onUpdateExchange(parseFloat(e.target.value))} className="bg-[#F9F7F2] p-2 rounded-xl w-24 text-right font-medium outline-none" />
+                    </div>
+                </div>
+            </div>
+            )
+        }
+
+        // --- MAIN APP ---
+        const App = () => {
+            const [user, setUser] = useState(null);
+            const [authLoading, setAuthLoading] = useState(true);
+            const [view, setView] = useState('dashboard'); 
+            
+            // Data State
+            const [transactions, setTransactions] = useState([]);
+            const [events, setEvents] = useState([]);
+            const [currency, setCurrency] = useState('NIO'); 
+            const [exchangeRate, setExchangeRate] = useState(36.60);
+            const [shortcuts, setShortcuts] = useState([]);
+
+            // Modal Visibility State
+            const [isAddOpen, setIsAddOpen] = useState(false);
+            const [isShortcutManagerOpen, setIsShortcutManagerOpen] = useState(false);
+
+            useEffect(() => {
+                const unsubscribe = onAuthStateChanged(auth, (u) => {
+                    setUser(u);
+                    setAuthLoading(false);
+                });
+                return () => unsubscribe();
+            }, []);
+
+            useEffect(() => {
+                if (!user) return;
+                const txQuery = query(collection(db, 'artifacts', appId, 'users', user.uid, 'transactions'), orderBy('date', 'desc'));
+                const unsubTx = onSnapshot(txQuery, (snap) => setTransactions(snap.docs.map(doc => ({ id: doc.id, ...doc.data() }))));
+
+                const settingsRef = doc(db, 'artifacts', appId, 'users', user.uid, 'settings', 'config');
+                const unsubSettings = onSnapshot(settingsRef, (snap) => {
+                    if (snap.exists()) {
+                        const data = snap.data();
+                        if (data.exchangeRate) setExchangeRate(data.exchangeRate);
+                        if (data.shortcuts) setShortcuts(data.shortcuts);
+                    } else {
+                        setDoc(settingsRef, { exchangeRate: 36.60, shortcuts: DEFAULT_SHORTCUTS }, { merge: true });
+                    }
+                });
+
+                const eventsQuery = query(collection(db, 'artifacts', appId, 'users', user.uid, 'events'), orderBy('createdAt', 'desc'));
+                const unsubEvents = onSnapshot(eventsQuery, (snap) => setEvents(snap.docs.map(doc => ({ id: doc.id, ...doc.data() }))));
+
+                return () => { unsubTx(); unsubSettings(); unsubEvents(); };
+            }, [user]);
+
+            const totals = useMemo(() => {
+                const now = new Date();
+                let totalBalance = 0, monthIncome = 0, monthExpense = 0;
+                transactions.forEach(t => {
+                    const val = parseFloat(t.amount);
+                    const d = t.date.toDate();
+                    const isThisMonth = d.getMonth() === now.getMonth() && d.getFullYear() === now.getFullYear();
+                    if (t.type === 'income') {
+                        totalBalance += val;
+                        if (isThisMonth) monthIncome += val;
+                    } else {
+                        totalBalance -= val;
+                        if (isThisMonth) monthExpense += val;
+                    }
+                });
+                return { totalBalance, monthIncome, monthExpense };
+            }, [transactions]);
+
+            const handleAddTransaction = async (data) => {
+                if (!user) return;
+                const finalAmount = currency === 'USD' ? data.amount * exchangeRate : data.amount;
+                await addDoc(collection(db, 'artifacts', appId, 'users', user.uid, 'transactions'), {
+                    amount: finalAmount,
+                    categoryId: data.type === 'income' ? 'income' : data.category.id,
+                    categoryName: data.type === 'income' ? 'Ingreso' : data.category.name,
+                    note: data.note || (data.type === 'income' ? 'Ingreso' : data.category.name),
+                    date: Timestamp.now(),
+                    type: data.type,
+                    eventId: data.eventId
+                });
+            };
+
+            const handleQuickAdd = async (shortcut) => {
+                if (!user) return;
+                const catObj = CATEGORIES.find(c => c.id === shortcut.categoryId) || CATEGORIES[1];
+                await addDoc(collection(db, 'artifacts', appId, 'users', user.uid, 'transactions'), {
+                amount: shortcut.amount,
+                categoryId: catObj.id,
+                categoryName: catObj.name,
+                note: shortcut.name,
+                date: Timestamp.now(),
+                type: 'expense',
+                eventId: null
+                });
+            };
+
+            const handleShortcutAdd = async (newSc) => {
+                const updated = [...shortcuts, { ...newSc, id: Date.now().toString(), type: 'expense' }];
+                await setDoc(doc(db, 'artifacts', appId, 'users', user.uid, 'settings', 'config'), { shortcuts: updated }, { merge: true });
+            };
+
+            const handleShortcutDelete = async (id) => {
+                const updated = shortcuts.filter(s => s.id !== id);
+                await setDoc(doc(db, 'artifacts', appId, 'users', user.uid, 'settings', 'config'), { shortcuts: updated }, { merge: true });
+            };
+
+            const handleAddEvent = async (name, budget) => {
+                if(!name || !user) return;
+                await addDoc(collection(db, 'artifacts', appId, 'users', user.uid, 'events'), {
+                    name, budget: parseFloat(budget) || 0, createdAt: Timestamp.now()
+                });
+            }
+
+            if (authLoading) return <div className="min-h-screen bg-[#F9F7F2] flex items-center justify-center"><div className="animate-spin rounded-full h-10 w-10 border-b-2 border-[#1A4D2E]"></div></div>;
+            if (!user) return <div className={`min-h-screen ${THEME.bg} text-[#2D2D2D] font-sans`}><LoginView /></div>;
+
+            return (
+                <div className={`min-h-screen ${THEME.bg} text-[#2D2D2D] font-sans overflow-x-hidden`}>
+                <main className="max-w-md mx-auto min-h-screen p-6 relative">
+                    {view === 'dashboard' && <DashboardView 
+                        user={user} currency={currency} setCurrency={setCurrency} 
+                        totals={totals} shortcuts={shortcuts} transactions={transactions}
+                        handleQuickAdd={handleQuickAdd} setIsShortcutManagerOpen={setIsShortcutManagerOpen}
+                        exchangeRate={exchangeRate}
+                    />}
+                    {view === 'stats' && <StatsView transactions={transactions} currency={currency} exchangeRate={exchangeRate} />}
+                    {view === 'goals' && <MetasView events={events} transactions={transactions} user={user} onAddEvent={handleAddEvent} onDeleteEvent={(id) => deleteDoc(doc(db, 'artifacts', appId, 'users', user.uid, 'events', id))} />}
+                    {view === 'settings' && <SettingsView user={user} exchangeRate={exchangeRate} onLogout={() => signOut(auth)} onUpdateExchange={(val) => { setExchangeRate(val); setDoc(doc(db, 'artifacts', appId, 'users', user.uid, 'settings', 'config'), { exchangeRate: val }, { merge: true }); }} />}
+                </main>
+
+                <div className="fixed bottom-8 left-1/2 -translate-x-1/2 z-40">
+                    <button onClick={() => setIsAddOpen(true)} className="bg-[#D4AF37] text-white w-16 h-16 rounded-full shadow-[0_4px_20px_rgba(212,175,55,0.4)] flex items-center justify-center transition-transform active:scale-90 border-4 border-[#F9F7F2]"><Plus size={32}/></button>
+                </div>
+
+                <div className="fixed bottom-0 left-0 right-0 bg-white border-t border-gray-100 pb-safe pt-2 px-6 z-30">
+                    <div className="max-w-md mx-auto flex justify-between items-end pb-4">
+                        <button onClick={() => setView('dashboard')} className={`flex flex-col items-center gap-1 w-16 ${view === 'dashboard' ? 'text-[#1A4D2E]' : 'text-gray-300'}`}><Wallet size={24} strokeWidth={view==='dashboard'?2.5:2} /><span className="text-[10px] font-medium">Wallet</span></button>
+                        <button onClick={() => setView('stats')} className={`flex flex-col items-center gap-1 w-16 ${view === 'stats' ? 'text-[#1A4D2E]' : 'text-gray-300'}`}><TrendingUp size={24} strokeWidth={view==='stats'?2.5:2} /><span className="text-[10px] font-medium">Stats</span></button>
+                        <div className="w-16"></div>
+                        <button onClick={() => setView('goals')} className={`flex flex-col items-center gap-1 w-16 ${view === 'goals' ? 'text-[#1A4D2E]' : 'text-gray-300'}`}><Briefcase size={24} strokeWidth={view==='goals'?2.5:2} /><span className="text-[10px] font-medium">Metas</span></button>
+                        <button onClick={() => setView('settings')} className={`flex flex-col items-center gap-1 w-16 ${view === 'settings' ? 'text-[#1A4D2E]' : 'text-gray-300'}`}><Settings size={24} strokeWidth={view==='settings'?2.5:2} /><span className="text-[10px] font-medium">Ajustes</span></button>
+                    </div>
+                </div>
+
+                <AddTransactionModal 
+                    isOpen={isAddOpen} 
+                    onClose={() => setIsAddOpen(false)} 
+                    currency={currency} 
+                    exchangeRate={exchangeRate}
+                    categories={CATEGORIES}
+                    events={events}
+                    onSave={handleAddTransaction}
+                />
+
+                <ShortcutManagerModal 
+                    isOpen={isShortcutManagerOpen} 
+                    onClose={() => setIsShortcutManagerOpen(false)}
+                    shortcuts={shortcuts}
+                    onAdd={handleShortcutAdd}
+                    onDelete={handleShortcutDelete}
+                    categories={CATEGORIES}
+                />
+                </div>
+            );
+        };
+
+        // Renderizado
+        const root = ReactDOM.createRoot(document.getElementById('root'));
+        root.render(<App />);
+    </script>
+</body>
 </html>
 
